@@ -7,6 +7,9 @@ import (
 	"syscall"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+
+	pubsub "github.com/rickNoise/learn-pub-sub-starter/internal/pubsub"
+	routing "github.com/rickNoise/learn-pub-sub-starter/internal/routing"
 )
 
 func main() {
@@ -20,6 +23,25 @@ func main() {
 	}
 	defer conn.Close()
 	fmt.Println("RabbitMQ connection successful")
+
+	// create a new channel on the Rabbit MQ connection
+	ch, err := conn.Channel()
+	if err != nil {
+		fmt.Printf("failed to create a channel on the connection: %v\n", err)
+		os.Exit(1)
+	}
+
+	// use PublishJSON function to publish a message to the exchange
+	err = pubsub.PublishJSON(
+		ch,
+		routing.ExchangePerilDirect,
+		routing.PauseKey,
+		routing.PauseKey,
+	)
+	if err != nil {
+		fmt.Printf("failed to publish message to the exchange: %v\n", err)
+		os.Exit(1)
+	}
 
 	// wait for ctrl+c
 	signalChan := make(chan os.Signal, 1)
