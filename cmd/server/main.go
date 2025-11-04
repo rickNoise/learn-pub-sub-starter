@@ -22,7 +22,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer conn.Close()
-	fmt.Println("RabbitMQ connection successful")
+	fmt.Println("RabbitMQ connection successful (server)")
 
 	// create a new channel on the Rabbit MQ connection
 	ch, err := conn.Channel()
