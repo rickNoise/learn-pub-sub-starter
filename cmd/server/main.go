@@ -3,19 +3,19 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	pubsub "github.com/rickNoise/learn-pub-sub-starter/internal/pubsub"
-	routing "github.com/rickNoise/learn-pub-sub-starter/internal/routing"
+	"github.com/rickNoise/learn-pub-sub-starter/internal/gamelogic"
+	"github.com/rickNoise/learn-pub-sub-starter/internal/pubsub"
+	"github.com/rickNoise/learn-pub-sub-starter/internal/routing"
 )
 
 func main() {
-	// where to connect to the RabbitMQ server
-	ampqURL := "amqp://guest:guest@localhost:5672/"
+	// **** CONNECT TO RABBITMQ **** //
 
+	// connect to the RabbitMQ server
+	ampqURL := "amqp://guest:guest@localhost:5672/"
 	conn, err := amqp.Dial(ampqURL)
 	if err != nil {
 		fmt.Printf("failed to Dial amqp: %v\n", err)
@@ -30,24 +30,53 @@ func main() {
 		fmt.Printf("failed to create a channel on the connection: %v\n", err)
 		os.Exit(1)
 	}
+	defer ch.Close()
+	fmt.Println("channel succsesfully created on the connection")
 
-	// use PublishJSON function to publish a message to the exchange
-	err = pubsub.PublishJSON(
-		ch,
-		routing.ExchangePerilDirect,
-		routing.PauseKey,
-		routing.PauseKey,
-	)
-	if err != nil {
-		fmt.Printf("failed to publish message to the exchange: %v\n", err)
-		os.Exit(1)
+	// print useful server commands to REPL for user
+	gamelogic.PrintServerHelp()
+
+	// **** USER REPL **** //
+
+	quitRequest := false
+	for !quitRequest {
+		// get user input
+		userInput := []string{}
+		for len(userInput) == 0 {
+			userInput = gamelogic.GetInput()
+		}
+		switch userInput[0] {
+		case "pause":
+			fmt.Println("sending a pause message...")
+			// use PublishJSON function to publish a message to the exchange
+			err = pubsub.PublishJSON(
+				ch,
+				routing.ExchangePerilDirect,
+				routing.PauseKey,
+				routing.PlayingState{IsPaused: true},
+			)
+			if err != nil {
+				fmt.Println("failed to publish message to the exchange:", err)
+				os.Exit(1)
+			}
+		case "resume":
+			fmt.Println("sending a resume message...")
+			// use PublishJSON function to publish a message to the exchange
+			err = pubsub.PublishJSON(
+				ch,
+				routing.ExchangePerilDirect,
+				routing.PauseKey,
+				routing.PlayingState{IsPaused: false},
+			)
+			if err != nil {
+				fmt.Println("failed to publish message to the exchange:", err)
+				os.Exit(1)
+			}
+		case "quit":
+			fmt.Println("quitting...")
+			quitRequest = true
+		default:
+			fmt.Println("invalid command")
+		}
 	}
-
-	// wait for ctrl+c
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
-	sig := <-signalChan
-
-	fmt.Printf("\nReceived signal: %v\n", sig)
-	fmt.Println("Shutting down gracefully...")
 }
