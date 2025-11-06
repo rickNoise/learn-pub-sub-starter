@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"slices"
 
@@ -37,7 +38,7 @@ func main() {
 	}
 
 	// declare and bind the pause queue
-	ch, qu, err := pubsub.DeclareAndBind(
+	pauseCh, pauseQu, err := pubsub.DeclareAndBind(
 		conn,
 		routing.ExchangePerilDirect,
 		routing.PauseKey+"."+username, // pause.username where username is the user's input. The pause section of the name is the routing key constant in the internal/routing package and is joined by a .
@@ -48,13 +49,26 @@ func main() {
 		fmt.Printf("error with DeclareAndBind: %v", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Queue %v declared and bound!\n", qu.Name)
+	fmt.Printf("Queue %v declared and bound!\n", pauseQu.Name)
 
 	// remove once values are used
-	fmt.Println(ch, qu)
+	fmt.Println(pauseCh, pauseQu)
 
 	// create a new game state
 	gs := gamelogic.NewGameState(username)
+
+	// call pubsub.SubscribeJSON
+	err = pubsub.SubscribeJSON[routing.PlayingState](
+		conn,
+		routing.ExchangePerilDirect,
+		"pause."+username,
+		routing.PauseKey,
+		pubsub.QueueTransient,
+		handlerPause(gs),
+	)
+	if err != nil {
+		log.Fatalf("could not subscribe to pause queue")
+	}
 
 	// REPL user input loop
 	quitRequest := false
@@ -113,7 +127,6 @@ func main() {
 		default:
 			fmt.Println("Invalid command!")
 		}
-
 	}
 
 	// keep client running
