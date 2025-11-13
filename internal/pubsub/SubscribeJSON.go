@@ -60,20 +60,19 @@ func SubscribeJSON[T any](
 						fmt.Println("handlder panic:", r)
 					}
 				}()
-				ackResponse := handler(data)
-				switch ackResponse {
+				switch handler(data) {
 				case Ack:
 					delivery.Ack(false)
-					fmt.Println("Acked message:", delivery.MessageId)
+					fmt.Println("Acked message")
 				case NackRequeue:
 					delivery.Nack(false, true)
-					fmt.Println("Nacked message, requeued:", delivery.MessageId)
+					fmt.Println("Nacked message, requeued")
 				case NackDiscard:
 					delivery.Nack(false, false)
-					fmt.Println("Nacked message, discarded:", delivery.MessageId)
+					fmt.Println("Nacked message, discarded:")
 				default:
 					delivery.Nack(false, false)
-					fmt.Println("Nacked message, discarded:", delivery.MessageId)
+					fmt.Println("Nacked message, discarded:")
 				}
 			}()
 
