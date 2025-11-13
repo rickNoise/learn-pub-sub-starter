@@ -13,7 +13,7 @@ func SubscribeJSON[T any](
 	queueName,
 	key string,
 	queueType SimpleQueueType, // an enum to represent "durable" or "transient"
-	handler func(T),
+	handler func(T) Acktype,
 ) error {
 	// Call DeclareAndBind to make sure that the given queue exists and is bound to the exchange
 	ch, qu, err := DeclareAndBind(
@@ -51,7 +51,7 @@ func SubscribeJSON[T any](
 				_ = delivery.Nack(false, false)
 				continue
 			}
-			
+
 			panicked := false
 			func() {
 				defer func() {
@@ -60,11 +60,21 @@ func SubscribeJSON[T any](
 						fmt.Println("handlder panic:", r)
 					}
 				}()
-				handler(data)
+				ackResponse := handler(data)
+				switch ackResponse {
+				case Ack:
+					delivery.Ack(false)
+				case NackRequeue:
+					delivery.Nack(false, true)
+				case NackDiscard:
+					delivery.Nack(false, false)
+				default:
+					delivery.Nack(false, false)
+				}
 			}()
 
 			if panicked {
-				_ = delivery.Nack(false, false) 
+				_ = delivery.Nack(false, false)
 				continue
 			}
 
