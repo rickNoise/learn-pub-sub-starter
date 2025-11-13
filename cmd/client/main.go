@@ -49,25 +49,54 @@ func main() {
 		fmt.Printf("error with DeclareAndBind: %v", err)
 		os.Exit(1)
 	}
+	defer pauseCh.Close()
 	fmt.Printf("Queue %v declared and bound!\n", pauseQu.Name)
 
-	// remove once values are used
-	fmt.Println(pauseCh, pauseQu)
+	// subscribe to moves by other players
+	moveCh, moveQu, err := pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilTopic,
+		"army_moves."+username,
+		"army_moves.*",
+		pubsub.QueueTransient,
+	)
+	if err != nil {
+		fmt.Printf("error with DeclareAndBind: %v", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Queue %v declared and bound!\n", moveQu.Name)
+	defer moveCh.Close()
 
 	// create a new game state
 	gs := gamelogic.NewGameState(username)
 
-	// call pubsub.SubscribeJSON
-	err = pubsub.SubscribeJSON[routing.PlayingState](
+	// call pubsub.SubscribeJSON to consume the pause queue
+	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
-		"pause."+username,
+		pauseQu.Name,
 		routing.PauseKey,
 		pubsub.QueueTransient,
 		handlerPause(gs),
 	)
 	if err != nil {
 		log.Fatalf("could not subscribe to pause queue")
+	}
+
+	// consume the move queue
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilTopic,
+		moveQu.Name,
+		"army_moves.*",
+		pubsub.QueueTransient,
+		func(mv gamelogic.ArmyMove) {
+			_ = gs.HandleMove(mv)
+			fmt.Print("> ")
+		},
+	)
+	if err != nil {
+		log.Fatalf("could not subscribe to move queue")
 	}
 
 	// REPL user input loop
@@ -111,10 +140,26 @@ func main() {
 				fmt.Println("available locations:", locationValues)
 				break
 			}
-			_, err := gs.CommandMove(userInput)
+			move, err := gs.CommandMove(userInput)
 			if err != nil {
 				fmt.Println(err)
+			} else {
+				// publish the move
+				fmt.Println("sending a move message...")
+				// use PublishJSON function to publish a message to the exchange
+				err = pubsub.PublishJSON(
+					moveCh,
+					routing.ExchangePerilTopic,
+					"army_moves."+username,
+					move,
+				)
+				if err != nil {
+					fmt.Println("failed to publish message to the exchange:", err)
+					os.Exit(1)
+				}
+				fmt.Println("successfully published move!")
 			}
+
 		case "status":
 			gs.CommandStatus()
 		case "help":
@@ -128,7 +173,4 @@ func main() {
 			fmt.Println("Invalid command!")
 		}
 	}
-
-	// keep client running
-	select {}
 }
