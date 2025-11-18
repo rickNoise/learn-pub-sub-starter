@@ -20,37 +20,40 @@ func main() {
 
 	fmt.Println("Starting Peril client...")
 
-	// connect to the RabbitMQ server
+	// ***************************** //
+	// **** CONNECT TO RABBITMQ **** //
+	// ***************************** //
+
 	amqpURL := "amqp://guest:guest@localhost:5672/"
 	conn, err := amqp.Dial(amqpURL)
 	if err != nil {
 		log.Fatalf("failed to Dial amqp: %v\n", err)
 	}
 	defer conn.Close()
-	fmt.Println("RabbitMQ connection successful (client)!")
+	fmt.Println("Peril client successfully created connection to RabbitMQ!")
 
-	// prompt user for a username
+	// Prompt user for a username
 	username, err := gamelogic.ClientWelcome()
 	for err != nil {
 		fmt.Println(err, "\npick a username:")
 		username, err = gamelogic.ClientWelcome()
 	}
 
-	// declare and bind the pause queue
+	// Declare and bind the pause queue
 	chPause, quPause, err := pubsub.DeclareAndBind(
 		conn,
 		routing.ExchangePerilDirect,
-		routing.PauseKey+"."+username, // pause.username where username is the user's input. The pause section of the name is the routing key constant in the internal/routing package and is joined by a .
+		routing.PauseKey+"."+username,
 		routing.PauseKey,
 		pubsub.QueueTransient,
 	)
 	if err != nil {
 		log.Fatalf("error with DeclareAndBind: %v", err)
 	}
-	defer chPause.Close()
 	fmt.Printf("Queue %v declared and bound!\n", quPause.Name)
+	defer chPause.Close()
 
-	// subscribe to moves by other players
+	// Declare and bind the queue receiving moves by other players
 	moveCh, moveQu, err := pubsub.DeclareAndBind(
 		conn,
 		routing.ExchangePerilTopic,
@@ -65,10 +68,10 @@ func main() {
 	fmt.Printf("Queue %v declared and bound!\n", moveQu.Name)
 	defer moveCh.Close()
 
-	// create a new game state
+	// Create a new game state
 	gs := gamelogic.NewGameState(username)
 
-	// call pubsub.SubscribeJSON to consume the pause queue
+	// Subscribe to the pause queue
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
@@ -81,22 +84,14 @@ func main() {
 		log.Fatalf("could not subscribe to pause queue")
 	}
 
-	// consume the move queue
+	// Subscribe to the move queue
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilTopic,
 		moveQu.Name,
 		"army_moves.*",
 		pubsub.QueueTransient,
-		func(mv gamelogic.ArmyMove) pubsub.Acktype {
-			outcome := gs.HandleMove(mv)
-			defer fmt.Print("> ")
-			if outcome == gamelogic.MoveOutComeSafe || outcome == gamelogic.MoveOutcomeMakeWar {
-				return pubsub.Ack
-			} else {
-				return pubsub.NackDiscard
-			}
-		},
+		handlerMove(gs),
 	)
 	if err != nil {
 		log.Fatalf("could not subscribe to move queue")

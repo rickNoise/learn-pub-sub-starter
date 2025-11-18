@@ -16,3 +16,15 @@ func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) pubsub.Ack
 		return pubsub.Ack
 	}
 }
+
+func handlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) pubsub.Acktype {
+	return func(mv gamelogic.ArmyMove) pubsub.Acktype {
+		outcome := gs.HandleMove(mv)
+		defer fmt.Print("> ")
+		if outcome == gamelogic.MoveOutComeSafe || outcome == gamelogic.MoveOutcomeMakeWar {
+			return pubsub.Ack
+		} else {
+			return pubsub.NackDiscard
+		}
+	}
+}
