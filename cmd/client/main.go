@@ -97,7 +97,10 @@ func main() {
 		log.Fatalf("could not subscribe to move queue")
 	}
 
-	// REPL user input loop
+	// ***************************** //
+	// **** USER INPUT REPL ******** //
+	// ***************************** //
+
 	quitRequest := false
 	for !quitRequest {
 		// get user input
@@ -157,7 +160,6 @@ func main() {
 				}
 				fmt.Println("successfully published move!")
 			}
-
 		case "status":
 			gs.CommandStatus()
 		case "help":
