@@ -54,6 +54,7 @@ func SubscribeJSON[T any](
 
 			panicked := false
 			func() {
+				defer fmt.Print("> ")
 				defer func() {
 					if r := recover(); r != nil {
 						panicked = true
