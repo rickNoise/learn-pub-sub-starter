@@ -19,16 +19,15 @@ func main() {
 	locationValues := []string{"americas", "europe", "africa", "asia", "antarctica", "australia"}
 
 	fmt.Println("Starting Peril client...")
-	amqpURL := "amqp://guest:guest@localhost:5672/"
 
 	// connect to the RabbitMQ server
+	amqpURL := "amqp://guest:guest@localhost:5672/"
 	conn, err := amqp.Dial(amqpURL)
 	if err != nil {
-		fmt.Printf("failed to Dial amqp: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("failed to Dial amqp: %v\n", err)
 	}
 	defer conn.Close()
-	fmt.Println("RabbitMQ connection successful (client)")
+	fmt.Println("RabbitMQ connection successful (client)!")
 
 	// prompt user for a username
 	username, err := gamelogic.ClientWelcome()
@@ -38,7 +37,7 @@ func main() {
 	}
 
 	// declare and bind the pause queue
-	pauseCh, pauseQu, err := pubsub.DeclareAndBind(
+	chPause, quPause, err := pubsub.DeclareAndBind(
 		conn,
 		routing.ExchangePerilDirect,
 		routing.PauseKey+"."+username, // pause.username where username is the user's input. The pause section of the name is the routing key constant in the internal/routing package and is joined by a .
@@ -46,11 +45,10 @@ func main() {
 		pubsub.QueueTransient,
 	)
 	if err != nil {
-		fmt.Printf("error with DeclareAndBind: %v", err)
-		os.Exit(1)
+		log.Fatalf("error with DeclareAndBind: %v", err)
 	}
-	defer pauseCh.Close()
-	fmt.Printf("Queue %v declared and bound!\n", pauseQu.Name)
+	defer chPause.Close()
+	fmt.Printf("Queue %v declared and bound!\n", quPause.Name)
 
 	// subscribe to moves by other players
 	moveCh, moveQu, err := pubsub.DeclareAndBind(
@@ -74,7 +72,7 @@ func main() {
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
-		pauseQu.Name,
+		quPause.Name,
 		routing.PauseKey,
 		pubsub.QueueTransient,
 		handlerPause(gs),

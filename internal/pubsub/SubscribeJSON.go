@@ -69,10 +69,10 @@ func SubscribeJSON[T any](
 					fmt.Println("Nacked message, requeued")
 				case NackDiscard:
 					delivery.Nack(false, false)
-					fmt.Println("Nacked message, discarded:")
+					fmt.Println("Nacked message, discarded")
 				default:
 					delivery.Nack(false, false)
-					fmt.Println("Nacked message, discarded:")
+					fmt.Println("Nacked message, discarded")
 				}
 			}()
 
@@ -80,8 +80,6 @@ func SubscribeJSON[T any](
 				_ = delivery.Nack(false, false)
 				continue
 			}
-
-			_ = delivery.Ack(false)
 
 		}
 	}()

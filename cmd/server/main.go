@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -13,29 +12,29 @@ import (
 )
 
 func main() {
-	// **** CONNECT TO RABBITMQ **** //
-	ampqURL := "amqp://guest:guest@localhost:5672/"
 
-	// connect to the RabbitMQ server
-	conn, err := amqp.Dial(ampqURL)
+	// ***************************** //
+	// **** CONNECT TO RABBITMQ **** //
+	// ***************************** //
+
+	amqpURL := "amqp://guest:guest@localhost:5672/"
+	conn, err := amqp.Dial(amqpURL)
 	if err != nil {
-		fmt.Printf("failed to Dial amqp: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("failed to Dial amqp: %v\n", err)
 	}
 	defer conn.Close()
 	fmt.Println("Peril game server connected to RabbitMQ!")
 
-	// create a new channel on the Rabbit MQ connection
-	ch, err := conn.Channel()
+	// Create a new publishing channel on the Rabbit MQ connection
+	chPub, err := conn.Channel()
 	if err != nil {
-		fmt.Printf("failed to create a channel on the connection: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("failed to create publishing channel on the AMQP connection: %v\n", err)
 	}
-	defer ch.Close()
-	fmt.Println("channel succsesfully created on the connection")
+	defer chPub.Close()
+	fmt.Println("Publishing channel created on the connection successfully!")
 
-	// declare and bind a queue for game logs
-	_, qu, err := pubsub.DeclareAndBind(
+	// Declare and bind a queue for game logs, creating a logging channel
+	chLog, quLog, err := pubsub.DeclareAndBind(
 		conn,
 		routing.ExchangePerilTopic,
 		routing.GameLogSlug,
@@ -43,14 +42,31 @@ func main() {
 		pubsub.QueueDurable,
 	)
 	if err != nil {
-		log.Fatalf("failed to declare and bind game logs queue!")
+		log.Fatalf("failed to declare and bind game logs queue!: %v", err)
 	}
-	fmt.Println("successfully declared and bound game logs queue:", qu.Name)
+	fmt.Println("Successfully declared and bound game logs queue:", quLog.Name)
+	defer chLog.Close()
+
+	// Process game logs by printing to the console
+	msgs, err := chLog.Consume(quLog.Name, "", false, false, false, false, nil)
+	if err != nil {
+		log.Fatalf("Failed to consume game logs channel: %v", err)
+	}
+	go func() {
+		for d := range msgs {
+			fmt.Println("chLog message:", d.Body)
+			// handle d.Body
+			d.Ack(false)
+		}
+	}()
+
+	// ******************* //
+	// **** USER REPL **** //
+	// ******************* //
 
 	// print useful server commands to REPL for user
+	fmt.Println()
 	gamelogic.PrintServerHelp()
-
-	// **** USER REPL **** //
 
 	quitRequest := false
 	for !quitRequest {
@@ -64,27 +80,25 @@ func main() {
 			fmt.Println("sending a pause message...")
 			// use PublishJSON function to publish a message to the exchange
 			err = pubsub.PublishJSON(
-				ch,
+				chPub,
 				routing.ExchangePerilDirect,
 				routing.PauseKey,
 				routing.PlayingState{IsPaused: true},
 			)
 			if err != nil {
-				fmt.Println("failed to publish message to the exchange:", err)
-				os.Exit(1)
+				log.Fatalf("failed to publish message to the exchange: %v", err)
 			}
 		case "resume":
 			fmt.Println("sending a resume message...")
 			// use PublishJSON function to publish a message to the exchange
 			err = pubsub.PublishJSON(
-				ch,
+				chPub,
 				routing.ExchangePerilDirect,
 				routing.PauseKey,
 				routing.PlayingState{IsPaused: false},
 			)
 			if err != nil {
-				fmt.Println("failed to publish message to the exchange:", err)
-				os.Exit(1)
+				log.Fatalf("failed to publish message to the exchange: %v", err)
 			}
 		case "quit":
 			fmt.Println("quitting...")

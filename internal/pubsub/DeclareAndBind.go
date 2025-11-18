@@ -21,13 +21,13 @@ func DeclareAndBind(
 	key string,
 	queueType SimpleQueueType, // an enum to represent "durable" or "transient"
 ) (*amqp.Channel, amqp.Queue, error) {
-	// create a new channel on the connection
+	// Create a new channel on the connection
 	ch, err := conn.Channel()
 	if err != nil {
 		return nil, amqp.Queue{}, fmt.Errorf("error creating a channel: %v", err)
 	}
 
-	// declare a new queue
+	// Declare a new queue
 	qu, err := ch.QueueDeclare(
 		queueName,
 		queueType == QueueDurable,
