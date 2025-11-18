@@ -21,9 +21,12 @@ func handlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) pubsub.Acktyp
 	return func(mv gamelogic.ArmyMove) pubsub.Acktype {
 		outcome := gs.HandleMove(mv)
 		defer fmt.Print("> ")
-		if outcome == gamelogic.MoveOutComeSafe || outcome == gamelogic.MoveOutcomeMakeWar {
+		switch outcome {
+		case gamelogic.MoveOutComeSafe:
 			return pubsub.Ack
-		} else {
+		case gamelogic.MoveOutcomeMakeWar:
+			return pubsub.Ack
+		default:
 			return pubsub.NackDiscard
 		}
 	}
