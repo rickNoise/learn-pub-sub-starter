@@ -80,7 +80,6 @@ func SubscribeJSON[T any](
 				_ = delivery.Nack(false, false)
 				continue
 			}
-
 		}
 	}()
 
