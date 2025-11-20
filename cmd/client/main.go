@@ -91,6 +91,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("could bot subscribe to war queue: %v", err)
 	}
+	fmt.Println("Client subscribed to the war queue!")
 
 	// ******************************** //
 	// ** User Input REPL ************* //
