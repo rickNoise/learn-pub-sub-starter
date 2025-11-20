@@ -43,12 +43,11 @@ func handlerMove(gs *gamelogic.GameState, publishCh *amqp.Channel) func(gamelogi
 				fmt.Printf("error publishing a recognition of war: %s\n", err)
 				return pubsub.NackRequeue
 			}
-			// CH5 L6 told me to put this in...
-			return pubsub.NackRequeue
-		default:
-			fmt.Println(fmt.Errorf("error: unknown move outcome"))
-			return pubsub.NackDiscard
+			return pubsub.Ack
 		}
+
+		fmt.Println(fmt.Errorf("error: unknown move outcome"))
+		return pubsub.NackDiscard
 	}
 }
 
