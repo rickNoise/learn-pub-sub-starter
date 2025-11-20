@@ -33,32 +33,27 @@ func main() {
 	defer chPub.Close()
 	fmt.Println("Publishing channel created on the connection successfully!")
 
-	// Declare and bind a queue for game logs, creating a logging channel
-	chLog, quLog, err := pubsub.DeclareAndBind(
+	// Subscribe to game logs
+	err = pubsub.SubscribeGob(
 		conn,
 		routing.ExchangePerilTopic,
-		routing.GameLogSlug,
-		routing.GameLogSlug+".*",
+		string(routing.GameLogSlug),
+		string(routing.GameLogSlug)+".*",
 		pubsub.QueueDurable,
+		func(gl routing.GameLog) pubsub.Acktype {
+			defer fmt.Print("> ")
+
+			err := gamelogic.WriteLog(gl)
+			if err != nil {
+				return pubsub.NackRequeue
+			}
+			return pubsub.Ack
+		},
 	)
 	if err != nil {
-		log.Fatalf("failed to declare and bind game logs queue!: %v", err)
+		log.Fatalf("failed to subscribe to game logs queue!: %v", err)
 	}
-	fmt.Println("Successfully declared and bound game logs queue:", quLog.Name)
-	defer chLog.Close()
-
-	// Process game logs by printing to the console
-	msgs, err := chLog.Consume(quLog.Name, "", false, false, false, false, nil)
-	if err != nil {
-		log.Fatalf("Failed to consume game logs channel: %v", err)
-	}
-	go func() {
-		for d := range msgs {
-			fmt.Println("chLog message:", d.Body)
-			// handle d.Body
-			d.Ack(false)
-		}
-	}()
+	fmt.Println("Successfully subscribed game logs queue")
 
 	// ******************* //
 	// **** USER REPL **** //
