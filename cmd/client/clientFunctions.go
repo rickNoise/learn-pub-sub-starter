@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rickNoise/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/rickNoise/learn-pub-sub-starter/internal/pubsub"
 	"github.com/rickNoise/learn-pub-sub-starter/internal/routing"
@@ -17,16 +18,35 @@ func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) pubsub.Ack
 	}
 }
 
-func handlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) pubsub.Acktype {
+func handlerMove(gs *gamelogic.GameState, publishCh *amqp.Channel) func(gamelogic.ArmyMove) pubsub.Acktype {
 	return func(mv gamelogic.ArmyMove) pubsub.Acktype {
-		outcome := gs.HandleMove(mv)
 		defer fmt.Print("> ")
+
+		outcome := gs.HandleMove(mv)
 		switch outcome {
+		case gamelogic.MoveOutcomeSamePlayer:
+			return pubsub.Ack
 		case gamelogic.MoveOutComeSafe:
 			return pubsub.Ack
 		case gamelogic.MoveOutcomeMakeWar:
-			return pubsub.Ack
+			// Publish move
+			err := pubsub.PublishJSON(
+				publishCh,
+				routing.ExchangePerilTopic,
+				routing.WarRecognitionsPrefix+"."+gs.GetUsername(),
+				gamelogic.RecognitionOfWar{
+					Attacker: mv.Player,
+					Defender: gs.GetPlayerSnap(),
+				},
+			)
+			if err != nil {
+				fmt.Printf("error publishing a recognition of war: %s\n", err)
+				return pubsub.NackRequeue
+			}
+			// CH5 L6 told me to put this in...
+			return pubsub.NackRequeue
 		default:
+			fmt.Println(fmt.Errorf("error: unknown move outcome"))
 			return pubsub.NackDiscard
 		}
 	}
