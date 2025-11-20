@@ -79,6 +79,19 @@ func main() {
 	}
 	fmt.Println("Client subscribed to the move queue!")
 
+	// Subscribe the war queue
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilTopic,
+		"war",
+		routing.WarRecognitionsPrefix+".*",
+		pubsub.QueueDurable,
+		handlerWar(gs),
+	)
+	if err != nil {
+		log.Fatalf("could bot subscribe to war queue: %v", err)
+	}
+
 	// ******************************** //
 	// ** User Input REPL ************* //
 	// ******************************** //
