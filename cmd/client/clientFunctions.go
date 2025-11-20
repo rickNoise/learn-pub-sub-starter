@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rickNoise/learn-pub-sub-starter/internal/gamelogic"
@@ -51,11 +52,11 @@ func handlerMove(gs *gamelogic.GameState, publishCh *amqp.Channel) func(gamelogi
 	}
 }
 
-func handlerWar(gs *gamelogic.GameState) func(gamelogic.RecognitionOfWar) pubsub.Acktype {
+func handlerWar(gs *gamelogic.GameState, publishCh *amqp.Channel) func(gamelogic.RecognitionOfWar) pubsub.Acktype {
 	return func(rw gamelogic.RecognitionOfWar) pubsub.Acktype {
 		defer fmt.Print("> ")
 
-		outcome, _, _ := gs.HandleWar(rw)
+		outcome, winner, loser := gs.HandleWar(rw)
 		switch outcome {
 		case gamelogic.WarOutcomeNotInvolved:
 			// NackRequeue the message so another client can try to consume it
@@ -63,13 +64,48 @@ func handlerWar(gs *gamelogic.GameState) func(gamelogic.RecognitionOfWar) pubsub
 		case gamelogic.WarOutcomeNoUnits:
 			return pubsub.NackDiscard
 		case gamelogic.WarOutcomeOpponentWon:
+			logMessage := fmt.Sprintf("%s won a war against %s", winner, loser)
+			err := publishGameLog(logMessage, publishCh, gs)
+			if err != nil {
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack
 		case gamelogic.WarOutcomeYouWon:
+			logMessage := fmt.Sprintf("%s won a war against %s", winner, loser)
+			err := publishGameLog(logMessage, publishCh, gs)
+			if err != nil {
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack
 		case gamelogic.WarOutcomeDraw:
+			logMessage := fmt.Sprintf("A war between %s and %s resulted in a draw", winner, loser)
+			err := publishGameLog(logMessage, publishCh, gs)
+			if err != nil {
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack
 		}
 		fmt.Println("error: unrecognised outcome from gs.HandleWar")
 		return pubsub.NackDiscard
 	}
+}
+
+func publishGameLog(msg string, publishCh *amqp.Channel, gs *gamelogic.GameState) error {
+	gameLog := routing.GameLog{
+		CurrentTime: time.Now(),
+		Message:     msg,
+		Username:    gs.GetUsername(),
+	}
+
+	err := pubsub.PublishGob(
+		publishCh,
+		routing.ExchangePerilTopic,
+		routing.GameLogSlug+"."+gs.GetUsername(),
+		gameLog,
+	)
+	if err != nil {
+		return fmt.Errorf("error publishing game log: %v", err)
+	}
+
+	return nil
 }
