@@ -29,6 +29,9 @@ func SubscribeGob[T any](
 	}
 	fmt.Println("successfully declared and bound queue:", qu.Name)
 
+	// limit prefetchCount to 10 messages
+	ch.Qos(10, 0, false)
+
 	deliveryChan, err := ch.Consume(
 		qu.Name,
 		"",
